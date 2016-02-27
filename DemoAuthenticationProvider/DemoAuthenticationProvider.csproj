@@ -16,7 +16,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>bin\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -24,7 +24,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>bin\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -80,7 +80,15 @@
   <ItemGroup>
     <None Include="DemoAuthenticationProviderKey.pfx" />
     <None Include="packages.config" />
+    <None Include="Scripts\ADFSProviderPublisher\ADFSProviderPublisher.psd1" />
+    <None Include="Scripts\ADFSProviderPublisher\ADFSProviderPublisher.psm1" />
+    <None Include="Scripts\ADFSProviderPublisher\Copy-AuthProvider.ps1" />
+    <None Include="Scripts\ADFSProviderPublisher\Get-AssemblyVersion.ps1" />
+    <None Include="Scripts\ADFSProviderPublisher\Get-PublicKeyToken.ps1" />
+    <None Include="Scripts\ADFSProviderPublisher\Install-AuthProvider.ps1" />
+    <None Include="Scripts\ADFSProviderPublisher\Uninstall-AuthProvider.ps1" />
     <None Include="Scripts\postbuild.ps1" />
+    <None Include="Scripts\Publish-AuthProvider.ps1" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

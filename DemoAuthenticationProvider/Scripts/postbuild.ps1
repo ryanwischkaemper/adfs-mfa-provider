@@ -1,4 +1,4 @@
-[cmdletbinding()]
+[Cmdletbinding()]
 param(
 	[string]$targetdir,
 	[string]$providerAssemblyName
