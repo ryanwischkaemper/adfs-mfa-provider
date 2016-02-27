@@ -1,28 +1,114 @@
 [cmdletbinding()]
-param([string]$targetdir)
+param(
+	[string]$targetdir,
+	[string]$providerAssemblyName
+)
 
-# First create all the strong key file
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\sn.exe' -k "$($targetdir)DemoAuthenticationProvider.snk" > $null
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\sn.exe' -k "$($targetdir)Twilio.Api.snk" > $null
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\sn.exe' -k "$($targetdir)RestSharp.snk" > $null
+function Format-FileExtension{
+    [cmdletbinding()]
+    param(
+		[Parameter(Position=1,Mandatory=$true)]
+		[string]$FilePath,
+		[Parameter(Position=2,Mandatory=$true)]
+		[string]$NewExtension
+    )
+    
+    $result = '{0}\{1}.{2}' -f [System.IO.Directory]::GetParent($FilePath).FullName, [System.IO.Path]::GetFileNameWithoutExtension($FilePath), $NewExtension
+    $result 
+}
 
+function Format-DllPaths{
+	[Cmdletbinding()]
+	param(
+		[Parameter(Position=0,Mandatory=$true, ValueFromPipeline=$true)]
+		[string[]]$DllPaths
+	)
 
-# decompile the DLLS to IL so we can add strong names
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\ildasm.exe' /all /out="$($targetdir)DemoAuthenticationProvider.il" "$($targetdir)DemoAuthenticationProvider.dll" > $null
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\ildasm.exe' /all /out="$($targetdir)Twilio.Api.il" "$($targetdir)Twilio.Api.dll" > $null
-& 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\ildasm.exe' /all /out="$($targetdir)RestSharp.il" "$($targetdir)RestSharp.dll" > $null
+	process {
+		foreach($dllpath in $DllPaths){
+			$obj = New-Object -TypeName PSObject
+			$obj | Add-Member -MemberType NoteProperty -Name DllPath -Value $dllpath
+			$obj | Add-Member -MemberType NoteProperty -Name SnkPath -Value (Format-FileExtension $dllpath 'snk')
+			$obj | Add-Member -MemberType NoteProperty -Name IlPath -Value (Format-FileExtension $dllpath 'il')
+			$obj | Add-Member -MemberType NoteProperty -Name ResPath -Value (Format-FileExtension $dllpath 'res')
 
-# delete the dll files so we can compile them
-Remove-Item -Path "$($targetdir)Twilio.Api.dll"
-Remove-Item -Path "$($targetdir)RestSharp.dll"
+			Write-Output $obj
+		}
+	}
+}
 
-#recompile the dlls with strong names
-& 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe' /dll /Resource="$($targetdir)DemoAuthenticationProvider.res" /out="$($targetdir)DemoAuthenticationProvider.dll" /Key="$($targetdir)DemoAuthenticationProvider.snk" "$($targetdir)DemoAuthenticationProvider.il" > $null
-& 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe' /dll /Resource="$($targetdir)Twilio.Api.res" /out="$($targetdir)Twilio.Api.dll" /Key="$($targetdir)Twilio.Api.snk" "$($targetdir)Twilio.Api.il" > $null
-& 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe' /dll /Resource="$($targetdir)RestSharp.res" /out="$($targetdir)RestSharp.dll" /Key="$($targetdir)RestSharp.snk" "$($targetdir)RestSharp.il" > $null
+function Invoke-Sn{
+	<#
+		.SYNOPSIS
+		Create strong key file(s) for assembly(s)
+	#>
+	[Cmdletbinding()]
+	param(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+		[psobject[]]$Assemblies
+	)
+
+    begin { $snTool = 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\sn.exe' }
+
+	process {
+		foreach($assembly in $Assemblies){
+			& $snTool -k "$($assembly.SnkPath)" > $null
+			Write-Output $assembly
+		}
+	}
+}
+
+function Invoke-Ildasm{
+	<#
+		.SYNOPSIS
+		Decompile the assembly(s) to IL so we can add strong names
+	#>
+	[Cmdletbinding()]
+	param(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+		[psobject[]]$Assemblies
+	)
+
+	begin { $ildasmTool = 'C:\Program Files (x86)\Microsoft SDKs\Windows\v8.1A\bin\NETFX 4.5.1 Tools\ildasm.exe' }
+
+	process {
+		foreach($assembly in $Assemblies){
+			& $ildasmTool /all /out="$($assembly.IlPath)" "$($assembly.DllPath)" > $null
+			Write-Output $assembly
+		}
+	}
+}
+
+function Invoke-Ilasm{
+	<#
+		.SYNOPSIS
+		Recompile the assembly(s) with strong names
+	#>
+	[Cmdletbinding()]
+	param(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+		[psobject[]]$Assemblies
+	)
+
+	begin { $ilasmTool = 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe' }
+
+	process {
+		foreach($assembly in $Assemblies){
+			& $ildasmTool /all /out="$($assembly.IlPath)" "$($assembly.DllPath)" > $null
+			& $ilasmTool /dll /Resource="$($assembly.ResPath)" /out="$($assembly.DllPath)" /Key="$($assembly.SnkPath)" "$($assembly.IlPath)" > $null
+			Write-Output $assembly
+		}
+	}
+}
+
+# Dissasemble, sign, and recompile all 3rd party assemblies
+Get-Childitem -Path $targetdir -Include *.dll -Recurse | Where-Object {	$_.Name -ne "$($providerAssemblyName).dll"} | 
+Select-Object -ExpandProperty FullName | Format-DllPaths | Invoke-Sn | Invoke-Ildasm | Invoke-Ilasm > $null 
 
 #cleanup
-Remove-Item -Path "$($targetdir)*" -Exclude *.dll,*.Resources.resources -Recurse -Force
+Remove-Item -Path "$($targetdir)*" -Exclude *.dll,*.Resources.resources -Recurse -Force > $null
+
+
 
 
 
